@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IOTA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Courier+Prime&family=Kalam:wght@400;700&display=swap">
+<style>
+/* Layout: full-bleed 3D-Skizzenblatt; Notizkarten liegen wie Zettel auf der Zeichnung. Bewusst nur ein (Papier-)Look. */
+:root {
+  --paper: #f5f3ec;
+  --card: #fffdf7;
+  --graphite: #34322d;
+  --graphite-soft: #6b675e;
+  --teal: #2f7d74;
+  --ochre: #a8722f;
+  --ochre-wash: #f1e4cf;
+  --f-hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;
+  --f-body: "Kalam", "Segoe Print", "Comic Sans MS", cursive;
+  --f-type: "Courier Prime", "Courier New", ui-monospace, monospace;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden;
+  background: var(--paper); color: var(--graphite);
+  font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+}
+[hidden] { display: none !important; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#stage canvas:active { cursor: grabbing; }
+#stage.hovering canvas { cursor: pointer; }
+
+.sketch {
+  background: var(--card);
+  border: 1.6px solid var(--graphite);
+  border-radius: 255px 14px 225px 14px / 14px 225px 14px 255px;
+  box-shadow: 3px 4px 0 rgba(52, 50, 45, .12);
+}
+
+header {
+  position: fixed; top: 16px; left: 16px;
+  max-width: min(460px, calc(100% - 32px));
+  pointer-events: none;
+}
+header h1 {
+  font-family: var(--f-hand); font-weight: 700; font-size: 3.2rem; line-height: 1;
+  margin: 0; letter-spacing: .02em;
+}
+header p { margin: .3rem 0 0; color: var(--graphite-soft); font-size: .95rem; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; pointer-events: auto; }
+
+button {
+  font: inherit; color: var(--graphite); cursor: pointer;
+  background: var(--card);
+  border: 1.4px solid var(--graphite);
+  border-radius: 255px 12px 225px 12px / 12px 225px 12px 255px;
+  padding: 3px 12px;
+}
+button:hover { background: #fff; transform: rotate(-.6deg); }
+button:focus-visible { outline: 2px dashed var(--teal); outline-offset: 3px; }
+button[aria-pressed="true"] { background: var(--ochre-wash); }
+.lang { display: inline-flex; padding: 0; overflow: hidden; }
+.lang span { padding: 3px 10px; font-family: var(--f-type); font-size: .82rem; letter-spacing: .05em; }
+.lang span.on { background: var(--graphite); color: var(--card); }
+
+abbr[data-full] { text-decoration: underline dotted 1.2px; text-underline-offset: 3px; cursor: help; position: relative; }
+abbr[data-full]:hover::after, abbr[data-full]:focus::after {
+  content: attr(data-full);
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 6;
+  width: max-content; max-width: 220px;
+  background: var(--graphite); color: var(--card);
+  font-family: var(--f-body); font-weight: 400; font-size: .82rem; line-height: 1.3;
+  padding: 3px 8px; border-radius: 6px 2px 6px 2px;
+}
+abbr[data-full]:focus { outline: none; }
+
+#panel {
+  position: fixed; top: 16px; right: 16px;
+  width: min(350px, calc(100% - 32px));
+  max-height: calc(100% - 120px);
+  overflow: auto; padding: 16px 18px 26px;
+  transform: rotate(.4deg);
+}
+#panel .eyebrow { font-family: var(--f-type); font-size: .78rem; color: var(--graphite-soft); letter-spacing: .06em; margin: 0; text-transform: uppercase; }
+#panel h2 { font-family: var(--f-hand); font-weight: 700; font-size: 2.1rem; line-height: 1; margin: .1rem 0 .55rem; text-wrap: balance; }
+#panel h3 { font-family: var(--f-hand); font-weight: 700; font-size: 1.35rem; margin: 1rem 0 .3rem; }
+#panel p { margin: .35rem 0; }
+#panel .close { position: absolute; top: 10px; right: 12px; padding: 0 9px; font-family: var(--f-hand); font-size: 1.2rem; }
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: .4rem 0 .6rem; }
+.pill { border: 1.3px solid var(--graphite-soft); border-radius: 10px 4px 10px 4px; padding: 0 8px; background: #fff; font-size: .9rem; }
+.pill.on { border-color: var(--c, var(--teal)); background: color-mix(in srgb, var(--c, var(--teal)) 14%, #fff); font-weight: 700; }
+.arrow { color: var(--c, var(--teal)); font-family: var(--f-hand); font-size: 1.3rem; line-height: 1; }
+.rel { color: var(--graphite-soft); }
+.ctx { font-weight: 700; }
+.note { font-size: .9rem; color: var(--graphite-soft); border-top: 1.2px dashed #c9c4b8; padding-top: .45rem; margin-top: .7rem !important; }
+.note.warn { color: var(--ochre); }
+.sats { list-style: none; padding: 0; margin: .2rem 0 0; display: grid; gap: 2px; }
+.sats li { display: flex; gap: 8px; align-items: baseline; }
+.sats li::before { content: "∘"; color: var(--c); font-weight: 700; }
+.sats li.hit { font-weight: 700; }
+.sats small { color: var(--graphite-soft); }
+.legend { display: grid; gap: 4px; margin: .3rem 0; font-size: .9rem; }
+.legend div { display: flex; align-items: center; gap: 10px; }
+.legend svg { flex: none; }
+.foot { font-size: .82rem; color: var(--graphite-soft); margin-top: .9rem !important; }
+
+#chips {
+  position: fixed; left: 16px; right: 16px; bottom: 14px;
+  display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 6px;
+  scrollbar-width: thin;
+}
+#chips button { flex: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+#chips .sw { width: 18px; height: 10px; background: var(--c); border-radius: 9px 3px 8px 2px; transform: rotate(-8deg);
+  background-image: repeating-linear-gradient(115deg, rgba(255,255,255,.45) 0 1px, transparent 1px 3px); }
+
+#tip {
+  position: fixed; pointer-events: none; z-index: 5;
+  background: var(--card); border: 1.2px solid var(--graphite); border-radius: 8px 3px 8px 3px;
+  padding: 2px 9px; font-size: .9rem; max-width: 280px;
+}
+#tip small { display: block; color: var(--graphite-soft); }
+#tip .full { display: block; font-size: .84rem; color: var(--teal); }
+#fallback { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; font-family: var(--f-hand); font-size: 1.6rem; }
+
+@media (max-width: 760px) {
+  header h1 { font-size: 2.4rem; }
+  header p.hint { display: none; }
+  #panel { top: auto; bottom: 66px; left: 16px; right: 16px; width: auto; max-height: 40%; transform: none; padding: 12px 14px 14px; }
+  #panel h2 { font-size: 1.7rem; }
+}
+#panel .fold { position: absolute; top: 10px; right: 52px; padding: 0 10px; font-size: .85rem; }
+#panel.min > :not(.eyebrow):not(h2):not(.fold):not(.close) { display: none; }
+#panel.min { padding-bottom: 6px; }
+#panel.min h2 { margin-bottom: .1rem; }
+#panel .eyebrow { padding-right: 150px; min-height: 1.6em; }
+#panel a { color: var(--teal); }
+</style>
+</head>
+<body>
+
+
+<div id="stage"></div>
+
+<header>
+  <h1>IOTA</h1>
+  <p class="hint" id="hint"></p>
+  <div class="tools">
+    <button id="btn-reset" type="button"></button>
+    <button id="btn-rotate" type="button" aria-pressed="true"></button>
+    <button id="btn-lang" class="lang" type="button" aria-label="Sprache / Language"><span data-l="de">DE</span><span data-l="en">EN</span></button>
+  </div>
+</header>
+
+<aside id="panel" class="sketch" aria-live="polite"></aside>
+<nav id="chips"></nav>
+<div id="tip" hidden></div>
+<div id="fallback" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ---------- Sprache ---------- */
+let lang = 'de';
+try { const s = localStorage.getItem('iota-net-lang'); if (s === 'en' || s === 'de') lang = s; } catch (e) {}
+const L = (de, en) => ({ de, en });
+const tr = v => v == null ? v : typeof v === 'string' ? v : v[lang];
+
+const UI = {
+  de: {
+    hint: 'Ziehen dreht · Scrollen zoomt · Knoten antippen öffnet den Strang',
+    reset: 'Ansicht zurücksetzen', rotate: 'Drehen', on: 'an', off: 'aus', all: 'Alle',
+    stage: '3D-Netzwerkskizze der IOTA-Projektstränge', chips: 'Stränge',
+    core: 'Kern', coreText: 'Die IOTA Foundation <em>entwickelt</em> die TWIN-Technologie. TWIN Foundation und TWIN-Technologie sind hier ein Knoten.',
+    rule: 'Jeder Strang zeigt seinen eigenen Bezug. Pfeile ergeben keine zusätzlichen Partnerschaften.',
+    legend: 'Linien lesen', l1: 'Bezug laut Quelle (Pfeil = Richtung)', l2: 'Partnerschaft nur laut Eigenquellen', l3: 'Akteur, Pilot, Thema oder Bezug im Strang',
+    foot: 'Prüffassung aus unseren Recherchen · keine neue Quellenprüfung · Verbindung ≠ Mainnet.',
+    strand: 'Strang', inStrand: 'Im Strang', close: 'Schließen', show: 'Notiz zeigen', hide: 'einklappen',
+    abbrHint: 'Abkürzungen: Mauszeiger darauf zeigt den vollen Namen.', source: 'Quelle',
+    fallback: 'Dein Browser kann hier kein WebGL zeichnen.',
+  },
+  en: {
+    hint: 'Drag to rotate · scroll to zoom · tap a node to open its strand',
+    reset: 'Reset view', rotate: 'Rotate', on: 'on', off: 'off', all: 'All',
+    stage: '3D network sketch of the IOTA project strands', chips: 'Strands',
+    core: 'Core', coreText: 'The IOTA Foundation <em>develops</em> the TWIN technology. TWIN Foundation and TWIN technology are one node here.',
+    rule: 'Each strand shows its own link. Arrows do not imply additional partnerships.',
+    legend: 'Reading the lines', l1: 'Link according to source (arrow = direction)', l2: 'Partnership only according to own sources', l3: 'Actor, pilot, topic or reference in the strand',
+    foot: 'Review draft from our research · no new source check · connection ≠ mainnet.',
+    strand: 'Strand', inStrand: 'In this strand', close: 'Close', show: 'Show note', hide: 'collapse',
+    abbrHint: 'Abbreviations: hover to see the full name.', source: 'Source',
+    fallback: 'Your browser cannot draw WebGL here.',
+  },
+};
+const t = k => UI[lang][k];
+
+/* Abkürzungen, die beim Hovern ausgeschrieben werden */
+const ABBR = {
+  'TLIP': 'Trade and Logistics Information Pipeline',
+  'TWIN': 'Trade Worldwide Information Network',
+  'ADAPT': 'Africa Digital Access and Public Infrastructure for Trade',
+  'AfCFTA': L('African Continental Free Trade Area (Afrikanische Kontinentale Freihandelszone)', 'African Continental Free Trade Area'),
+  'KenTrade': 'Kenya TradeNet System',
+  'KRA': 'Kenya Revenue Authority',
+  'KEPHIS': 'Kenya Plant Health Inspectorate Service',
+  'KPA': 'Kenya Ports Authority',
+  'AFA': 'Agriculture and Food Authority (Kenya)',
+  'TBI': 'Tony Blair Institute for Global Change',
+  'WEF': 'World Economic Forum',
+  'RISE': 'Research Institutes of Sweden',
+  'VWT': 'Virtual Watch Tower',
+  'GLEIF': 'Global Legal Entity Identifier Foundation',
+  'LEI': 'Legal Entity Identifier',
+  'vLEI': L('verifiable Legal Entity Identifier (verifizierbare LEI)', 'verifiable Legal Entity Identifier'),
+  'MoU': L('Memorandum of Understanding (Absichtserklärung)', 'Memorandum of Understanding'),
+  'H&M': 'Hennes & Mauritz',
+  'DLT': L('Distributed Ledger Technology (verteiltes Kassenbuch)', 'Distributed Ledger Technology'),
+  'DPP': L('Digitaler Produktpass (Digital Product Passport)', 'Digital Product Passport'),
+  'AAS': L('Asset Administration Shell (Verwaltungsschale)', 'Asset Administration Shell'),
+  'ESPR': L('EU-Ökodesign-Verordnung (Ecodesign for Sustainable Products Regulation)', 'Ecodesign for Sustainable Products Regulation (EU)'),
+};
+const abbrKeys = Object.keys(ABBR).sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&'));
+const abbrRe = new RegExp(`(?<![A-Za-z])(${abbrKeys.join('|')})(?![A-Za-z])`, 'g');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function rich(text) {
+  const s = String(text); let out = '', last = 0;
+  s.replace(abbrRe, (m, k, i) => { out += esc(s.slice(last, i)) + `<abbr tabindex="0" data-full="${esc(tr(ABBR[k]))}">${esc(m)}</abbr>`; last = i + m.length; return m; });
+  return out + esc(s.slice(last));
+}
+function expansions(text) {
+  const seen = new Set(), list = [];
+  String(text).replace(abbrRe, (m, k) => { if (!seen.has(k)) { seen.add(k); list.push(`${k} – ${tr(ABBR[k])}`); } return m; });
+  return list;
+}
+
+/* ---------- Daten (aus der Prüffassung vom 07.10.2026) ---------- */
+const TEAL = '#2f7d74', GRAPHITE = '#34322d';
+
+const CORE = [
+  { id: 'iota', label: 'IOTA Foundation', pos: [-46, 6, 0] },
+  { id: 'twin', label: 'TWIN', sub: L('Foundation · Technologie', 'Foundation · technology'), pos: [42, -2, 0] },
+];
+const CORE_EDGES = [
+  { a: 'iota', b: 'twin', label: L('entwickelt', 'develops'), color: TEAL },
+];
+
+const STRANDS = [
+  { id: 'tlip', name: L('TLIP · Kenia', 'TLIP · Kenya'), color: '#d4602a', from: ['twin'], chain: ['TLIP'],
+    rel: L('Handelsplattform / Entwicklung mit TradeMark Africa', 'Trade platform / developed with TradeMark Africa'),
+    ctx: 'KenTrade · KRA · KEPHIS · KPA · AFA',
+    note: L('Smart Corridor: Ausschreibung nennt TLIP als Backbone.', 'Smart Corridor: the tender names TLIP as its backbone.'),
+    sats: [{ t: 'KenTrade' }, { t: 'KRA' }, { t: 'KEPHIS' }, { t: 'KPA' }, { t: 'AFA' },
+           { t: 'TradeMark Africa', sub: L('Entwicklung', 'development') },
+           { t: 'Smart Corridor', sub: L('Ausschreibung', 'tender'), dash: true }],
+    pos: [58, -56, 40] },
+  { id: 'adapt', name: 'ADAPT · AfCFTA', color: '#c2921a', from: ['twin'], also: ['iota'], chain: ['ADAPT'],
+    rel: L('Technische Grundlage laut IOTA', 'Technical foundation according to IOTA'),
+    ctx: 'AfCFTA Secretariat · TBI · WEF · IOTA Foundation',
+    note: L('Erste Länder: Kenia, Nigeria, Marokko. Reifegrad offen.', 'First countries: Kenya, Nigeria, Morocco. Maturity still open.'),
+    sats: [{ t: 'AfCFTA Secretariat' }, { t: 'TBI' }, { t: 'WEF' },
+           { t: L('Kenia · Nigeria · Marokko', 'Kenya · Nigeria · Morocco'), sub: L('erste Länder', 'first countries'), dash: true }],
+    pos: [-4, -62, 30] },
+  { id: 'vwt', name: 'Virtual Watch Tower', color: '#2f6fa3', from: ['twin'], chain: ['VWT / VWTnet'],
+    rel: L('Föderierte Infrastruktur / Implementierungsspuren', 'Federated infrastructure / implementation traces'),
+    ctx: L('RISE · H&M-Pilot · Adnavem-Oberfläche', 'RISE · H&M pilot · Adnavem interface'),
+    note: L('Personelle Verbindung zwischen IOTA und TWIN.', 'Personnel link between IOTA and TWIN.'),
+    sats: [{ t: 'RISE' }, { t: L('H&M-Pilot', 'H&M pilot') }, { t: L('Adnavem-Oberfläche', 'Adnavem interface') }],
+    pos: [62, -46, -52] },
+  { id: 'resuld', name: 'RESULD', color: '#5b8f3e', from: ['twin'], chain: ['RESULD'],
+    rel: L('Zweiter Pilot: frühere Grenzdaten', 'Second pilot: earlier border data'),
+    ctx: L('Erster Pilot: European Cruise Logistics', 'First pilot: European Cruise Logistics'),
+    note: L('IOTA-Bezug: Dank im Pilotpost.', 'IOTA link: acknowledged in the pilot post.'),
+    sats: [{ t: 'European Cruise Logistics', sub: L('erster Pilot', 'first pilot') },
+           { t: L('frühere Grenzdaten', 'earlier border data'), sub: L('zweiter Pilot', 'second pilot') }],
+    pos: [108, 26, -16] },
+  { id: 'salus', name: 'Salus', color: '#b0303f', from: ['iota', 'twin'], fromLabel: 'IOTA / TWIN',
+    chain: ['Salus', 'Nexus'], rel: L('Partnernennung → Plattform-/Dossierspur', 'Partner mention → platform / dossier trail'),
+    ctx: L('TradeFlow · Rohstofffinanzierung / Tokenisierung', 'TradeFlow · commodity finance / tokenisation'),
+    note: L('Partnernennung belegt noch keine technische Integration.', 'A partner mention does not yet prove technical integration.'),
+    sats: [{ t: 'TradeFlow' }, { t: L('Rohstofffinanzierung / Tokenisierung', 'Commodity finance / tokenisation') }],
+    pos: [-14, 62, 44] },
+  { id: 'tees', name: 'Teesside', color: '#c4628f', from: ['iota', 'twin'], fromLabel: 'IOTA / TWIN',
+    dashed: true, chain: ['Trade Testbed'],
+    rel: L('Partnerschaft laut IOTA-/TWIN-Eigenquellen', 'Partnership according to IOTA/TWIN own sources'),
+    ctx: 'Teesside Airport · Teesside University',
+    note: L('Technischer Betrieb unabhängig noch nicht bestätigt.', 'Technical operation not yet independently confirmed.'), warn: true,
+    sats: [{ t: 'Teesside Airport' }, { t: 'Teesside University' }],
+    pos: [26, 66, -48] },
+  { id: 'turing', name: 'TuringCerts', color: '#5a4a9c', from: ['iota'], chain: ['TuringCerts', 'Turing Space'],
+    rel: L('Produkt auf IOTA / Unternehmenszuordnung', 'Product on IOTA / company attribution'),
+    ctx: L('Fubon: Anwendungsumfang noch prüfen', 'Fubon: scope of use still to be checked'),
+    note: L('Agenten-MoU: Turing Space + neuland.ai + PolyCrypt; IOTA dort nicht ausdrücklich genannt.',
+            'Agent MoU: Turing Space + neuland.ai + PolyCrypt; IOTA is not explicitly named there.'),
+    sats: [{ t: 'Fubon', sub: L('Anwendungsumfang prüfen', 'check scope of use'), dash: true },
+           { t: 'neuland.ai', sub: L('Agenten-MoU', 'agent MoU'), at: 1 }, { t: 'PolyCrypt', sub: L('Agenten-MoU', 'agent MoU'), at: 1 }],
+    pos: [-90, -22, 44] },
+  { id: 'gleif', name: 'GLEIF', color: '#8a5527', to: 'iota', chain: ['GLEIF'],
+    rel: L('LEI / vLEI · angekündigte Zusammenarbeit / MoU', 'LEI / vLEI · announced cooperation / MoU'),
+    ctx: L('Verifizierbare Organisationsidentität', 'Verifiable organisational identity'),
+    note: L('Kein pauschaler Produktnachweis; keine Swift-/Banken-Kante.', 'No blanket proof of product use; no Swift / bank link.'),
+    sats: [{ t: 'LEI / vLEI' }],
+    pos: [-104, 36, -24] },
+  { id: 'siemens', name: 'Siemens', color: '#4f6478', to: 'iota', toLabel: 'IOTA (DLT)', chain: ['Siemens'],
+    rel: L('Datenarchitektur mit AAS und DLT (IOTA) für den digitalen Produktpass', 'Data architecture with AAS and DLT (IOTA) for the digital product passport'),
+    ctx: L('SIRIUS 3RW5-Z R11 refurbished · ID-Link · DPP', 'SIRIUS 3RW5-Z R11 refurbished · ID Link · DPP'),
+    note: L('Architektur laut Siemens noch in Entwicklung; keine Partnerschaft mit der IOTA Foundation genannt. SENTRON ECPD steht in derselben Mitteilung, dort ohne IOTA-Bezug.',
+            'Architecture still under development according to Siemens; no partnership with the IOTA Foundation named. SENTRON ECPD appears in the same release, without an IOTA link.'), warn: true,
+    src: { label: L('Siemens-Pressemitteilung, 05.03.2026', 'Siemens press release, 5 March 2026'),
+           url: 'https://press.siemens.com/global/de/pressemitteilung/siemens-erweitert-portfolio-fuer-halbleiterbasierte-schutzschaltgeraete-und-bringt' },
+    sats: [{ t: 'SIRIUS 3RW5-Z R11', sub: L('zirkulärer Sanftstarter', 'circular soft starter') },
+           { t: 'ID-Link', sub: L('QR-Code', 'QR code') },
+           { t: L('Digitaler Produktpass (DPP)', 'Digital Product Passport (DPP)'), sub: 'ESPR', dash: true },
+           { t: 'AAS', sub: 'Asset Administration Shell' }],
+    pos: [-66, -54, -58] },
+];
+
+/* ---------- Helfer ---------- */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rng = mulberry32(1007);
+const rr = (a, b) => a + (b - a) * rng();
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => f < 0 ? Math.round(v * (1 + f)) : Math.round(v + (255 - v) * f));
+  return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+/* Papierstruktur als Hintergrund */
+(function paper() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); const r = mulberry32(5);
+  for (let i = 0; i < 9000; i++) {
+    const v = r() < .5 ? 0 : 255;
+    x.fillStyle = `rgba(${v},${v},${v},${r() * .05})`;
+    x.fillRect(r() * 256, r() * 256, 1 + r(), 1 + r());
+  }
+  x.strokeStyle = 'rgba(120,110,90,.035)';
+  for (let i = 0; i < 40; i++) { x.beginPath(); const y = r() * 256; x.moveTo(0, y); x.lineTo(256, y + r() * 6 - 3); x.stroke(); }
+  document.body.style.backgroundImage = `radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(120,105,80,.10)), url(${c.toDataURL()})`;
+})();
+
+/* ---------- Buntstift-Zeichnen auf Canvas ---------- */
+function wobblyPath(x, cx, cy, r, R, turns, amp) {
+  const start = R() * Math.PI * 2, p1 = R() * 6, p2 = R() * 6, steps = 70;
+  x.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const k = i / steps, a = start + turns * Math.PI * 2 * k;
+    const rad = r * (1 + amp * (Math.sin(a * 2 + p1) * .6 + Math.sin(a * 5 + p2) * .4)) * (1 + k * .035);
+    const px = cx + Math.cos(a) * rad, py = cy + Math.sin(a) * rad;
+    i ? x.lineTo(px, py) : x.moveTo(px, py);
+  }
+}
+function hatch(x, cx, cy, r, R, color, angle, gap, alpha, width) {
+  x.save();
+  wobblyPath(x, cx, cy, r, R, 1, .03); x.closePath(); x.clip();
+  x.translate(cx, cy); x.rotate(angle);
+  x.strokeStyle = color; x.lineWidth = width; x.lineCap = 'round';
+  for (let s = -r - 4; s < r + 4; s += gap * (.8 + R() * .5)) {
+    x.globalAlpha = alpha * (.65 + R() * .45);
+    x.beginPath();
+    x.moveTo(s + R() * 3 - 1.5, -r - 4);
+    x.quadraticCurveTo(s + R() * 6 - 3, 0, s + R() * 4 - 2, r + 4);
+    x.stroke();
+  }
+  x.restore();
+}
+function grain(x, size, R, amount) {
+  x.save(); x.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < amount; i++) { x.globalAlpha = R() * .7; x.fillRect(R() * size, R() * size, 1.3, 1.3); }
+  x.restore();
+}
+function nodeCanvas(n, variant) {
+  const size = n.kind === 'sat' ? 128 : 256;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d'); const R = mulberry32(n.seed * 31 + variant * 977);
+  const cx = size / 2, cy = size / 2, r = size * .31;
+  const col = n.color, dark = shade(col, -.35);
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  if (n.kind === 'core') {
+    hatch(x, cx, cy, r, R, TEAL, -.7, 5, .55, 2.6); hatch(x, cx, cy, r, R, shade(TEAL, .25), .5, 9, .3, 2);
+    x.strokeStyle = GRAPHITE;
+    for (let i = 0; i < 2; i++) { x.globalAlpha = .85; x.lineWidth = 3.2 - i; wobblyPath(x, cx, cy, r, R, 1.1, .04); x.stroke(); }
+  } else if (n.kind === 'hub' || n.kind === 'chain') {
+    const dense = n.kind === 'hub';
+    hatch(x, cx, cy, r, R, col, -.8 + R() * .3, dense ? 5 : 9, dense ? .6 : .4, 2.6);
+    if (dense) hatch(x, cx, cy, r, R, shade(col, .3), .6, 10, .3, 2);
+    x.strokeStyle = dark;
+    for (let i = 0; i < 2; i++) { x.globalAlpha = .9; x.lineWidth = 3 - i * .8; wobblyPath(x, cx, cy, r, R, 1.12, .05); x.stroke(); }
+  } else {
+    hatch(x, cx, cy, r, R, col, -.9, 7, .3, 1.6);
+    x.strokeStyle = dark; x.lineWidth = 2.2; x.globalAlpha = .85;
+    if (n.dash) x.setLineDash([7, 6]);
+    wobblyPath(x, cx, cy, r, R, 1.08, .06); x.stroke(); x.setLineDash([]);
+  }
+  x.globalAlpha = 1;
+  grain(x, size, R, size * 9);
+  return c;
+}
+function labelCanvas(text, opt) {
+  const S = 2, main = (opt.big ? 60 : opt.small ? 38 : 48) * S, subS = 30 * S;
+  const m = document.createElement('canvas').getContext('2d');
+  m.font = `700 ${main}px Caveat, cursive`; const w1 = m.measureText(text).width;
+  let w2 = 0; if (opt.sub) { m.font = `500 ${subS}px Caveat, cursive`; w2 = m.measureText(opt.sub).width; }
+  const pad = 10 * S, W = Math.ceil(Math.max(w1, w2) + pad * 2);
+  const H = Math.ceil(main * 1.05 + (opt.sub ? subS * 1.05 : 0) + (opt.underline ? 12 * S : 0) + pad);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.textBaseline = 'top';
+  const x0 = (W - w1) / 2;
+  x.fillStyle = opt.color || GRAPHITE; x.font = `700 ${main}px Caveat, cursive`;
+  x.globalAlpha = .92; x.fillText(text, x0, pad * .3);
+  let y = main * 1.02;
+  if (opt.underline) {
+    const R = mulberry32(text.length * 13);
+    x.strokeStyle = opt.underline; x.lineCap = 'round';
+    for (let i = 0; i < 2; i++) {
+      x.lineWidth = (3.4 - i * 1.2) * S; x.globalAlpha = .7;
+      x.beginPath(); x.moveTo(x0 + R() * 8, y + 4 * S + R() * 4);
+      x.quadraticCurveTo(W / 2, y + R() * 10, x0 + w1 - R() * 8, y + 2 * S + R() * 5); x.stroke();
+    }
+    y += 12 * S;
+  }
+  if (opt.sub) {
+    x.globalAlpha = .85; x.fillStyle = '#6b675e'; x.font = `500 ${subS}px Caveat, cursive`;
+    x.fillText(opt.sub, (W - w2) / 2, y);
+  }
+  return c;
+}
+
+/* ---------- Graph aufbauen ---------- */
+const V = a => new THREE.Vector3(a[0], a[1], a[2]);
+const nodes = [], byId = {}, edges = [];
+let seed = 1;
+function addNode(n) { n.seed = seed++; n.pos = n.pos instanceof THREE.Vector3 ? n.pos : V(n.pos); nodes.push(n); byId[n.id] = n; return n; }
+function addEdge(e) { edges.push(e); return e; }
+
+CORE.forEach(c => addNode({ id: c.id, label: c.label, sub: c.sub, kind: 'core', color: GRAPHITE, pos: c.pos, size: 24 }));
+CORE_EDGES.forEach(e => addEdge({ a: byId[e.a], b: byId[e.b], color: e.color, arrow: true, label: e.label, strand: null, main: true }));
+
+STRANDS.forEach(s => {
+  const base = V(s.pos), out = base.clone().normalize();
+  const chainNodes = s.chain.map((name, i) => addNode({
+    id: s.id + ':c' + i, label: name, kind: i === 0 ? 'hub' : 'chain', strand: s.id, color: s.color,
+    pos: base.clone().add(out.clone().multiplyScalar(30 * i)).add(new THREE.Vector3(i * 8 * Math.sign(base.x || 1), -i * 10, 0)),
+    size: i === 0 ? 17 : 13,
+  }));
+  if (s.to) addEdge({ a: chainNodes[0], b: byId[s.to], color: s.color, arrow: true, strand: s.id, main: true });
+  (s.from || []).forEach(f => addEdge({ a: byId[f], b: chainNodes[0], color: s.color, arrow: true, dashed: !!s.dashed, strand: s.id, main: true }));
+  (s.also || []).forEach(f => addEdge({ a: chainNodes[0], b: byId[f], color: s.color, dotted: true, strand: s.id }));
+  for (let i = 1; i < chainNodes.length; i++) addEdge({ a: chainNodes[i - 1], b: chainNodes[i], color: s.color, arrow: true, strand: s.id, main: true });
+  // Satelliten auf einer leicht geneigten Kreisbahn um ihren Ankerknoten
+  const groups = {};
+  s.sats.forEach(sat => (groups[sat.at || 0] ||= []).push(sat));
+  Object.entries(groups).forEach(([at, list]) => {
+    const anchor = chainNodes[+at];
+    // Kranz in der Bildebene, unten frei für die Beschriftung des Strangknotens
+    const u = new THREE.Vector3(1, 0, .25).normalize(), v = new THREE.Vector3(0, 1, 0);
+    const ring = list.length > 4 ? 32 : 27;
+    const a0 = -Math.PI * .28, span = Math.PI * 1.56;
+    list.forEach((sat, k) => {
+      const a = a0 + span * (list.length === 1 ? .5 : k / (list.length - 1)) + rr(-.08, .08) + (+at) * .5;
+      const p = anchor.pos.clone()
+        .add(u.clone().multiplyScalar(Math.cos(a) * ring))
+        .add(v.clone().multiplyScalar(Math.sin(a) * ring * .8))
+        .add(new THREE.Vector3(0, 0, rr(-8, 8)));
+      const n = addNode({ id: s.id + ':s' + nodes.length, label: sat.t, sub: sat.sub, kind: 'sat', strand: s.id, color: s.color,
+        pos: p, size: 7.5, dash: sat.dash });
+      addEdge({ a: anchor, b: n, color: s.color, dotted: true, strand: s.id });
+    });
+  });
+});
+
+/* ---------- Three.js ---------- */
+const stage = document.getElementById('stage');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+catch (err) { const f = document.getElementById('fallback'); f.textContent = t('fallback'); f.hidden = false; return; }
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setClearColor(0x000000, 0);
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 1, 2000);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .08;
+controls.minDistance = 40; controls.maxDistance = 520;
+controls.autoRotateSpeed = .45;
+
+function homeDistance() { const a = innerWidth / innerHeight; return a < 1 ? 250 / Math.max(a, .45) * .74 : 255; }
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+resize(); addEventListener('resize', resize);
+const HOME = new THREE.Vector3(0, -8, 0);
+controls.target.copy(HOME);
+camera.position.set(0, 38, homeDistance());
+
+/* Kanten: mehrere leicht versetzte Bleistiftstriche, die sanft „kochen“ */
+const SEG = 22, VARIANTS = 3;
+function bez(a, c, b, s, out) {
+  const k = 1 - s;
+  return out.set(k * k * a.x + 2 * k * s * c.x + s * s * b.x, k * k * a.y + 2 * k * s * c.y + s * s * b.y, k * k * a.z + 2 * k * s * c.z + s * s * b.z);
+}
+const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3();
+const randVec = s => new THREE.Vector3(rr(-s, s), rr(-s, s), rr(-s, s));
+edges.forEach(e => {
+  const len = e.a.pos.distanceTo(e.b.pos);
+  e.len = len;
+  e.bow = randVec(len * .09);
+  e.strokes = e.dotted ? 1 : e.main ? 3 : 2;
+  e.var = [];
+  for (let v = 0; v < VARIANTS; v++) {
+    const st = [];
+    for (let s = 0; s < e.strokes; s++) st.push({ c: randVec(len * .025 + .6), ja: randVec(.9), jb: randVec(.9), t0: rr(0, .03), t1: rr(0, .03) });
+    e.var.push(st);
+  }
+  const maxVerts = e.strokes * SEG * 2 + 8;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxVerts * 3), 3));
+  e.base = e.dotted ? .5 : e.main ? .8 : .6;
+  e.target = e.base;
+  e.mat = new THREE.LineBasicMaterial({ color: e.color, transparent: true, opacity: e.base, depthWrite: false });
+  e.obj = new THREE.LineSegments(geo, e.mat);
+  e.obj.frustumCulled = false;
+  scene.add(e.obj);
+});
+function writeEdge(e, variant) {
+  const arr = e.obj.geometry.attributes.position.array; let i = 0;
+  const A = e.a.pos, B = e.b.pos;
+  const mid = tmp3.copy(A).add(B).multiplyScalar(.5).add(e.bow);
+  const trimA = (e.a.size * .3) / e.len, trimB = (e.b.size * .3) / e.len;
+  const push = p => { arr[i++] = p.x; arr[i++] = p.y; arr[i++] = p.z; };
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  e.var[variant].forEach(s => {
+    a.copy(A).add(s.ja); b.copy(B).add(s.jb); c.copy(mid).add(s.c);
+    const t0 = trimA + s.t0, t1 = 1 - trimB - s.t1;
+    const n = e.dotted ? SEG * 2 : SEG;
+    for (let k = 0; k < n; k++) {
+      if (e.dotted && k % 2) continue;
+      if (e.dashed && (k % 4) >= 2) continue;
+      if (i / 3 + 2 > arr.length / 3 - 8) break;
+      push(bez(a, c, b, t0 + (t1 - t0) * k / n, tmp));
+      push(bez(a, c, b, t0 + (t1 - t0) * (k + 1) / n, tmp));
+    }
+  });
+  if (e.arrow) {
+    const s = 1 - trimB - .01;
+    const P = bez(A, mid, B, s, new THREE.Vector3());
+    const T = bez(A, mid, B, s - .02, new THREE.Vector3()).sub(P).normalize().negate();
+    const view = tmp2.copy(camera.position).sub(P).normalize();
+    const perp = new THREE.Vector3().crossVectors(T, view).normalize();
+    const al = Math.min(4.2, e.len * .12);
+    for (const sgn of [1, -1]) {
+      const j = variant * .15 * sgn;
+      push(P); push(P.clone().addScaledVector(T, -al).addScaledVector(perp, sgn * al * (.5 + j)));
+    }
+  }
+  e.obj.geometry.setDrawRange(0, i / 3);
+  e.obj.geometry.attributes.position.needsUpdate = true;
+  if (e.labelSprite) e.labelSprite.position.copy(bez(A, mid, B, .5, tmp));
+}
+
+/* Knoten + Beschriftungen als Sprites (zeigen immer zur Kamera, wie auf Papier gezeichnet) */
+const pickables = [];
+function setSpriteTexture(sp, cv, h) {
+  if (sp.material.map) sp.material.map.dispose();
+  const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
+  sp.material.map = tex; sp.material.needsUpdate = true;
+  sp.scale.set(h * cv.width / cv.height, h, 1);
+}
+function drawLabel(n) {
+  const sub = tr(n.sub);
+  const opt = n.kind === 'core' ? { big: true, underline: TEAL, sub }
+    : n.kind === 'hub' || n.kind === 'chain' ? { underline: n.color }
+    : { small: true, sub };
+  const h = n.kind === 'core' ? 7.4 + (sub ? 3.6 : 0) : n.kind === 'hub' ? 6.2 : n.kind === 'sat' ? (sub ? 5.4 : 3.4) : 5;
+  setSpriteTexture(n.label3d, labelCanvas(tr(n.label), opt), h);
+  n.label3d.center.set(.5, 1 + (n.size * .34) / h);
+}
+function drawEdgeLabel(e) { setSpriteTexture(e.labelSprite, labelCanvas(tr(e.label), { small: true, color: e.color }), 4.2); }
+function buildScene() {
+  nodes.forEach(n => {
+    n.tex = [0, 1].map(v => { const tx = new THREE.CanvasTexture(nodeCanvas(n, v)); tx.anisotropy = 4; return tx; });
+    n.mat = new THREE.SpriteMaterial({ map: n.tex[0], transparent: true, depthWrite: false });
+    n.sprite = new THREE.Sprite(n.mat);
+    n.sprite.scale.set(n.size, n.size, 1);
+    n.sprite.position.copy(n.pos); n.sprite.renderOrder = 2; n.sprite.userData.node = n;
+    scene.add(n.sprite); pickables.push(n.sprite);
+    n.lmat = new THREE.SpriteMaterial({ transparent: true, depthWrite: false });
+    n.label3d = new THREE.Sprite(n.lmat);
+    n.label3d.position.copy(n.pos); n.label3d.renderOrder = 3; n.label3d.userData.node = n;
+    scene.add(n.label3d); pickables.push(n.label3d);
+    drawLabel(n);
+    n.op = 1; n.target = 1;
+  });
+  edges.filter(e => e.label).forEach(e => {
+    e.labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+    e.labelSprite.center.set(.5, -.1); e.labelSprite.renderOrder = 3;
+    scene.add(e.labelSprite); drawEdgeLabel(e);
+  });
+}
+
+/* ---------- Auswahl, Fokus, Panel ---------- */
+let selected = null, selectedHit = null;
+function involves(sel, n) {
+  if (!sel) return true;
+  if (n.strand === sel) return true;
+  if (n.kind === 'core') { const s = STRANDS.find(x => x.id === sel); return !!s && ((s.from || []).includes(n.id) || s.to === n.id || (s.also || []).includes(n.id)); }
+  return false;
+}
+function applyFocus() {
+  nodes.forEach(n => n.target = involves(selected, n) ? 1 : .13);
+  edges.forEach(e => e.target = !selected ? e.base : (e.strand === selected ? Math.min(1, e.base + .15) : .05));
+  document.querySelectorAll('#chips button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === (selected || 'all'))));
+}
+
+const panel = document.getElementById('panel');
+const mobile = () => innerWidth <= 760;
+let panelMin = mobile();
+function addFold() {
+  panel.classList.toggle('min', panelMin);
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'fold';
+  const sync = () => { const m = panel.classList.contains('min'); b.textContent = m ? t('show') : t('hide'); b.setAttribute('aria-expanded', String(!m)); };
+  b.onclick = () => { panelMin = !panelMin; panel.classList.toggle('min', panelMin); sync(); };
+  sync(); panel.prepend(b);
+  if (!panel.querySelector('.close')) b.style.right = '12px';
+}
+const lineSvg = (dash, color) => `<svg width="46" height="10" aria-hidden="true"><path d="M2 6 Q 23 2 44 5" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" ${dash ? `stroke-dasharray="${dash}"` : ''}/></svg>`;
+function renderOverview() {
+  panel.style.removeProperty('--c');
+  panel.innerHTML = `
+    <p class="eyebrow">${t('core')}</p>
+    <h2>IOTA → TWIN</h2>
+    <div class="chain">
+      <span class="pill on">IOTA Foundation</span><span class="arrow">→</span>
+      <span class="pill on">${rich('TWIN')}</span>
+    </div>
+    <p class="rel">${t('coreText')}</p>
+    <p>${t('rule')}</p>
+    <h3>${t('legend')}</h3>
+    <div class="legend">
+      <div>${lineSvg('', TEAL)} ${t('l1')}</div>
+      <div>${lineSvg('7 5', '#c4628f')} ${t('l2')}</div>
+      <div>${lineSvg('1.5 4', GRAPHITE)} ${t('l3')}</div>
+    </div>
+    <p class="foot">${t('abbrHint')}<br>${t('foot')}</p>`;
+  addFold();
+}
+function renderStrand(s, hit) {
+  panel.style.setProperty('--c', s.color);
+  const src = s.to ? null : (s.fromLabel || (s.from[0] === 'twin' ? 'TWIN' : 'IOTA Foundation'));
+  const items = s.to ? [s.chain[0], s.toLabel || 'IOTA Foundation'] : [src, ...s.chain];
+  const arrow = s.dashed ? '⇢' : '→';
+  panel.innerHTML = `
+    <button class="close" type="button" aria-label="${t('close')}">×</button>
+    <p class="eyebrow">${t('strand')}</p>
+    <h2>${rich(tr(s.name))}</h2>
+    <div class="chain">${items.map((x, i) => `${i ? `<span class="arrow">${arrow}</span>` : ''}<span class="pill ${i ? 'on' : ''}">${rich(x)}</span>`).join('')}</div>
+    <p class="rel">${rich(tr(s.rel))}</p>
+    <p class="ctx">${rich(tr(s.ctx))}</p>
+    <h3>${t('inStrand')}</h3>
+    <ul class="sats">${s.sats.map(x => `<li class="${hit && hit.label === x.t ? 'hit' : ''}"><span>${rich(tr(x.t))}${x.sub ? ` <small>· ${rich(tr(x.sub))}</small>` : ''}</span></li>`).join('')}</ul>
+    <p class="note ${s.warn ? 'warn' : ''}">${rich(tr(s.note))}</p>${s.src ? `
+    <p class="foot">${t('source')}: <a href="${esc(s.src.url)}" target="_blank" rel="noopener">${esc(tr(s.src.label))}</a></p>` : ''}`;
+  addFold();
+  panel.querySelector('.close').onclick = () => select(null);
+}
+
+/* Kamerafahrt */
+let fly = null;
+function flyTo(target, dist) {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  fly = { t: 0, p0: camera.position.clone(), q0: controls.target.clone(), q1: target.clone(), p1: target.clone().add(dir.multiplyScalar(dist)) };
+  if (reduceMotion) fly.t = .999;
+}
+function centroid(list) { const c = new THREE.Vector3(); list.forEach(n => c.add(n.pos)); return c.multiplyScalar(1 / list.length); }
+
+function select(id, hit, move = true) {
+  selected = id; selectedHit = hit || null;
+  if (id && move) panelMin = false;
+  applyFocus();
+  if (!id) { renderOverview(); if (move) flyTo(HOME, homeDistance()); return; }
+  renderStrand(STRANDS.find(s => s.id === id), hit);
+  if (move) flyTo(centroid(nodes.filter(n => n.strand === id)), mobile() ? 150 : 120);
+}
+
+/* Chips */
+const chips = document.getElementById('chips');
+function renderChips() {
+  chips.setAttribute('aria-label', t('chips'));
+  chips.innerHTML = `<button type="button" data-id="all">${t('all')}</button>` +
+    STRANDS.map(s => {
+      const name = tr(s.name), full = expansions(name).join('\n');
+      return `<button type="button" data-id="${s.id}" style="--c:${s.color}"${full ? ` title="${esc(full)}"` : ''}><span class="sw"></span>${esc(name)}</button>`;
+    }).join('');
+}
+chips.addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  const id = b.dataset.id; select(id === 'all' ? null : id);
+});
+
+/* Werkzeuge */
+const rotBtn = document.getElementById('btn-rotate'), langBtn = document.getElementById('btn-lang');
+function setRotate(on) { controls.autoRotate = on; rotBtn.setAttribute('aria-pressed', String(on)); rotBtn.textContent = `${t('rotate')}: ${on ? t('on') : t('off')}`; }
+rotBtn.onclick = () => setRotate(!controls.autoRotate);
+document.getElementById('btn-reset').onclick = () => select(null);
+addEventListener('keydown', e => { if (e.key === 'Escape') select(null); });
+controls.addEventListener('start', () => { fly = null; });
+
+function applyLang(rebuild) {
+  document.documentElement.lang = lang;
+  document.getElementById('hint').textContent = t('hint');
+  document.getElementById('btn-reset').textContent = t('reset');
+  stage.setAttribute('aria-label', t('stage'));
+  setRotate(controls.autoRotate);
+  langBtn.querySelectorAll('span').forEach(s => s.classList.toggle('on', s.dataset.l === lang));
+  renderChips();
+  if (rebuild) {
+    nodes.forEach(drawLabel);
+    edges.filter(e => e.labelSprite).forEach(drawEdgeLabel);
+    select(selected, selectedHit, false);
+  }
+  applyFocus();
+}
+langBtn.onclick = () => {
+  lang = lang === 'de' ? 'en' : 'de';
+  try { localStorage.setItem('iota-net-lang', lang); } catch (e) {}
+  applyLang(true);
+};
+
+/* Picking */
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = document.getElementById('tip');
+function pick(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects(pickables).filter(h => h.object.userData.node.op > .4);
+  return hits.length ? hits[0].object.userData.node : null;
+}
+let down = null;
+renderer.domElement.addEventListener('pointerdown', ev => { down = { x: ev.clientX, y: ev.clientY }; });
+renderer.domElement.addEventListener('pointerup', ev => {
+  if (!down || Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 6) return;
+  const n = pick(ev);
+  if (!n || n.kind === 'core') { if (selected) select(null, null, false); return; }
+  select(n.strand, n);
+});
+renderer.domElement.addEventListener('pointermove', ev => {
+  if (ev.pointerType !== 'mouse') return;
+  const n = pick(ev);
+  stage.classList.toggle('hovering', !!n);
+  if (!n) { tip.hidden = true; return; }
+  const s = STRANDS.find(x => x.id === n.strand);
+  const label = tr(n.label), sub = tr(n.sub), sname = s ? tr(s.name) : '';
+  const full = expansions([label, sub, sname].filter(Boolean).join(' '));
+  tip.innerHTML = `${esc(label)}${full.map(f => `<span class="full">${esc(f)}</span>`).join('')}${sub ? `<small>${esc(sub)}</small>` : ''}${s && sname !== label ? `<small>${esc(sname)}</small>` : ''}`;
+  tip.hidden = false;
+  tip.style.left = Math.min(ev.clientX + 14, innerWidth - 290) + 'px';
+  tip.style.top = (ev.clientY + 14) + 'px';
+});
+renderer.domElement.addEventListener('pointerleave', () => { tip.hidden = true; });
+
+/* ---------- Loop ---------- */
+let boil = 0, lastBoil = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (fly) {
+    fly.t = Math.min(1, fly.t + .022);
+    const k = fly.t < .5 ? 2 * fly.t * fly.t : 1 - Math.pow(-2 * fly.t + 2, 2) / 2;
+    camera.position.lerpVectors(fly.p0, fly.p1, k);
+    controls.target.lerpVectors(fly.q0, fly.q1, k);
+    if (fly.t >= 1) fly = null;
+  }
+  controls.update();
+  const doBoil = !reduceMotion && now - lastBoil > 140;
+  if (doBoil) { lastBoil = now; boil = (boil + 1) % VARIANTS; }
+  nodes.forEach(n => {
+    n.op += (n.target - n.op) * .12;
+    n.mat.opacity = n.op; n.lmat.opacity = n.op;
+    if (doBoil) n.mat.map = n.tex[boil % 2];
+  });
+  edges.forEach(e => {
+    e.mat.opacity += (e.target - e.mat.opacity) * .12;
+    if (e.labelSprite) e.labelSprite.material.opacity = Math.min(1, e.mat.opacity * 1.2);
+    writeEdge(e, boil);
+  });
+  renderer.render(scene, camera);
+}
+
+/* Erst zeichnen, wenn die Handschrift geladen ist (Fallback nach 2,5 s) */
+setRotate(!reduceMotion);
+applyLang(false);
+const fontsReady = document.fonts ? Promise.all([
+  document.fonts.load('700 48px Caveat'), document.fonts.load('500 30px Caveat'),
+]) : Promise.resolve();
+Promise.race([fontsReady, new Promise(r => setTimeout(r, 2500))]).catch(() => {}).then(() => {
+  buildScene();
+  renderOverview();
+  applyFocus();
+  requestAnimationFrame(frame);
+});
+})();
+</script>
+</body>
+</html>
