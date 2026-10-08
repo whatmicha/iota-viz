@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>IOTA</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Courier+Prime&family=Kalam:wght@400;700&display=swap">
 <style>
+/* Schriften liegen lokal unter vendor/fonts (SIL Open Font License), kein Abruf bei Google */
+@font-face { font-family: "Caveat"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(vendor/fonts/caveat.woff2) format("woff2"); }
+@font-face { font-family: "Kalam"; font-style: normal; font-weight: 400; font-display: swap; src: url(vendor/fonts/kalam-400.woff2) format("woff2"); }
+@font-face { font-family: "Kalam"; font-style: normal; font-weight: 700; font-display: swap; src: url(vendor/fonts/kalam-700.woff2) format("woff2"); }
+@font-face { font-family: "Courier Prime"; font-style: normal; font-weight: 400; font-display: swap; src: url(vendor/fonts/courier-prime-400.woff2) format("woff2"); }
 /* Layout: full-bleed 3D-Skizzenblatt; Notizkarten liegen wie Zettel auf der Zeichnung. Bewusst nur ein (Papier-)Look. */
 :root {
   --paper: #f5f3ec;
@@ -189,8 +191,8 @@ abbr[data-full]:focus { outline: none; }
 <div id="tip" hidden></div>
 <div id="fallback" hidden></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
 <script>
 (() => {
 'use strict';
